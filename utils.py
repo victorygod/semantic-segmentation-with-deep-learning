@@ -38,10 +38,31 @@ def change_label_to_img(label_data):
 
 
 def get_data_list(file_path):
-    with open(file_path, 'rt') as f:
-        s = f.read()
-        data_list = s.split()
-        return data_list
+	with open(file_path, 'rt') as f:
+		s = f.read()
+		data_list = s.split()
+		return data_list
+
+def class_balancing():
+	label_dir = "../label_2012/"
+	index_file = "../../VOC2012/ImageSets/Segmentation/train.txt"
+	data_list = get_data_list(index_file)
+	l = len(data_list)
+	sumLabel = np.zeros((21))
+	for now in range(l):
+		if not os.path.isfile(label_dir+ data_list[now] +'.npy'):
+			continue
+		label = np.load(label_dir+ data_list[now] +'.npy')
+		shape = np.shape(label)
+		label = np.reshape(label, (shape[0]*shape[1], 21))
+		sumLabel += np.sum(label, axis = 0)/(shape[0]*shape[1])
+		print(np.round(sumLabel, decimals = 3))
+
+	sumLabel = l/sumLabel
+	norm = np.sum(sumLabel)
+	sumLabel = sumLabel / norm
+	return sumLabel
+
 
 recovery_path = './net_weights.npy'
 
@@ -99,4 +120,9 @@ def get_color_to_label_hash():
 		h[label[i][0], label[i][1], label[i][2]] = i
 	return h
 
-set_npy_num()
+#==============================================================
+
+#set_npy_num()
+
+# s = class_balancing()
+# print(s)
