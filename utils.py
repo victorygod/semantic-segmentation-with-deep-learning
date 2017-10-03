@@ -122,7 +122,7 @@ def get_color_to_label_hash():
 
 #==============================================================
 
-#set_npy_num()
+set_npy_num()
 
 # s = class_balancing()
 # print(s)
