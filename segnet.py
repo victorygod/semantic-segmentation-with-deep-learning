@@ -56,31 +56,18 @@ def max_pool_2x2(x, name):
     return tf.nn.max_pool_with_argmax(x, ksize = [1,2,2,1], strides = [1,2,2,1], padding = 'SAME', name = name)
 
 #===============uppooling===================
-def unravel_argmax(argmax, shape):
-    output_list = []
-    ashape = tf.shape(argmax)
-    argmax_line = tf.reshape(argmax, (1, ashape[0]*ashape[1]*ashape[2]*ashape[3]))
-    argmax_line = tf.squeeze(argmax_line)
-    output_list.append(argmax_line // (shape[2] * shape[3]))
-    output_list.append(argmax_line % (shape[2] * shape[3]) // shape[3])
-    output_list.append(argmax_line % (shape[2] * shape[3]) % shape[3])
-    output_list = tf.stack(output_list, axis = 1)
-    return output_list
-
+#CPU only!
+#Only for batch_size = 1
 def uppooling_layer(indata, raveled_argmax, out_shape):
-    #with tf.device('/gpu:0'):
-    indices = unravel_argmax(raveled_argmax, tf.to_int64(out_shape))
+    shape_argmax = tf.shape(raveled_argmax)
+    indices = tf.reshape(raveled_argmax, (shape_argmax[0]*shape_argmax[1]*shape_argmax[2]*shape_argmax[3], 1))
+    
     shape = tf.shape(indata)
     values = tf.reshape(indata, (1, shape[0]*shape[1]*shape[2]*shape[3]))
     values = tf.squeeze(values)
-    delta = tf.SparseTensor(indices, values, tf.to_int64((out_shape[1], out_shape[2],out_shape[3])))
-    return tf.expand_dims(tf.sparse_tensor_to_dense(tf.sparse_reorder(delta)), 0)
-    # indices = tf.squeeze(raveled_argmax)
-    # shape = tf.shape(indata)
-    # values = tf.reshape(indata, (1, shape[0]*shape[1]*shape[2]*shape[3]))
-    # values = tf.squeeze(values)
-    # delta = tf.SparseTensor(indices, values, tf.to_int64((1, out_shape[0]*out_shape[1]*out_shape[2]*out_shape[3])))
-    # return tf.reshape(tf.sparse_tensor_to_dense(tf.sparse_reorder(delta)), out_shape)
+
+    delta = tf.SparseTensor(indices, values, [tf.to_int64((out_shape[0]*out_shape[1]*out_shape[2]*out_shape[3]))])
+    return tf.reshape(tf.sparse_tensor_to_dense(tf.sparse_reorder(delta)), out_shape)
 #==========================================================================
 
 def channel_change(in_data, name, out_channel = NUM_CLASS, trainable = True):
