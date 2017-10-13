@@ -89,25 +89,26 @@ def get_weights():
 def set_npy_num(num=-1):
 	data = np.load("./net_weights.npy").item()
 	data["num"] = -1
+	data["epoch"] = -1
 	np.save("./net_weights.npy", data)
 
 #======================= format weights =======================
-def format_weights_from_fcn32():
-	data = np.load('weights.npy').item()
-	data_2 = {}
+# def format_weights_from_fcn32():
+# 	data = np.load('weights.npy').item()
+# 	data_2 = {}
 
-	for k in data:
-		if k=="score_fr":
-			data_2["conv8"] = [np.transpose(data[k][0]), data[k][1]]
-		elif k == "upscore":
-			data_2["deconv32"] = [np.transpose(data[k][0])]
-		else:
-			data_2[k]=[np.transpose(data[k][0]), data[k][1]]
+# 	for k in data:
+# 		if k=="score_fr":
+# 			data_2["conv8"] = [np.transpose(data[k][0]), data[k][1]]
+# 		elif k == "upscore":
+# 			data_2["deconv32"] = [np.transpose(data[k][0])]
+# 		else:
+# 			data_2[k]=[np.transpose(data[k][0]), data[k][1]]
 
-	np.save("net_weights.npy", data_2)
+# 	np.save("net_weights.npy", data_2)
 
 def get_color_to_label_hash():
-	h = np.zeros((255,255,255))
+	h = np.zeros((256,256,256))
 	for i in range(NUM_CLASS):
 		h[label[i][0], label[i][1], label[i][2]] = i
 	return h
@@ -135,4 +136,4 @@ def class_balancing():
 
 # file_path = "./net_weights.npy"
 # vgg = np.load(file_path, encoding='latin1').item()
-# print(np.shape(vgg["conv2_2"][0]))
+# print(np.shape(vgg["conv3_3"][0]))

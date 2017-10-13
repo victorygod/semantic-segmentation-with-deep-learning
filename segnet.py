@@ -40,12 +40,13 @@ def get_bias(name, shape = [64], trainable = True):
         return tf.get_variable(name = "bias", initializer = bias_init, trainable = trainable)
 
 
-def conv_layer(in_data, name, kernel_shape = (7,7,64,64), trainable = True):
+def conv_layer(in_data, name, kernel_shape = (7,7,64,64), trainable = True, has_bias = True):
     with tf.variable_scope(name) as scope:
         Kernel[name] = get_kernel(name, shape = kernel_shape, trainable = trainable)
         Bias[name] = get_bias(name,shape = [kernel_shape[3]], trainable = trainable)
         conv = tf.nn.conv2d(in_data, Kernel[name], strides = [1,1,1,1], padding = 'SAME')
-        conv = tf.nn.bias_add(conv, Bias[name])
+        if has_bias:
+            conv = tf.nn.bias_add(conv, Bias[name])
         conv = batch_norm_layer(conv, True, name)
         return conv
 
@@ -55,6 +56,7 @@ def batch_norm_layer(inputT, is_training, scope):
 def max_pool_2x2(x, name):
     return tf.nn.max_pool_with_argmax(x, ksize = [1,2,2,1], strides = [1,2,2,1], padding = 'SAME', name = name)
 
+#Thanks to https://github.com/tensorflow/tensorflow/issues/2169
 def uppooling_layer(indata, raveled_argmax, output_shape):
     input_shape =  tf.shape(indata)
     flat_input_size = input_shape[0]*input_shape[1]*input_shape[2]*input_shape[3]
@@ -63,10 +65,10 @@ def uppooling_layer(indata, raveled_argmax, output_shape):
     values = tf.reshape(indata, [flat_input_size])
     batch_range = tf.reshape(tf.range(tf.cast(output_shape[0], tf.int64), dtype=raveled_argmax.dtype), 
                                       shape=(input_shape[0], 1, 1, 1))
-    b = tf.ones_like(raveled_argmax) * batch_range
-    b = tf.reshape(b, (flat_input_size, 1))
+    batch_num = tf.ones_like(raveled_argmax) * batch_range
+    batch_num = tf.reshape(batch_num, (flat_input_size, 1))
     indices = tf.reshape(raveled_argmax, (flat_input_size, 1))
-    indices = tf.concat([b, indices], 1)
+    indices = tf.concat([batch_num, indices], 1)
 
     output = tf.scatter_nd(indices, values, shape=tf.cast(flat_output_shape, tf.int64))
     output = tf.reshape(output, output_shape)
@@ -91,14 +93,17 @@ def activateFunc(x):
 
 recovery_path = './net_weights.npy'
 data = {}
-start_num = 0
+#start_num = 0
+start_epoch = 0
 if os.path.isfile(recovery_path):
     data = np.load(recovery_path).item()
-    if "num" in data:
-        start_num = data["num"] + 1
-    else:
-        start_num = 0
-    print("Recover from " + recovery_path + ". At data " + str(start_num))
+    # if "num" in data:
+    #     start_num = data["num"] + 1
+    # else:
+    #     start_num = 0
+    if "epoch" in data:
+        start_epoch = data["epoch"] + 1
+    print("Recover from " + recovery_path + ". At data " + str(start_num) + " at epoch " + str(start_epoch))
 else:
     file_path = "./vgg16.npy"
     vgg = np.load(file_path, encoding='latin1').item()
@@ -141,13 +146,25 @@ pool1, pool1_argmax = max_pool_2x2(encoder_conv1_2, "pool1")
 # encoder_conv2_2 = activateFunc(encoder_conv2_2)
 # pool2, pool2_argmax = max_pool_2x2(encoder_conv2_2, "pool2")
 
-# #uppooling_2 = get_deconv_layer(pool2, name = "uppooling_2", shape = tf.shape(encoder_conv2_2), kernel_shape =(7,7, 128, 128), trainable = False)
-# uppooling_2 = uppooling_layer(pool2, pool2_argmax, tf.shape(encoder_conv2_2))
-# decoder_conv2_1 = conv_layer(uppooling_2, "decoder_conv2_1", kernel_shape = (7,7,128,64), trainable = True)
-# decoder_conv2_2 = conv_layer(decoder_conv2_1, "decoder_conv2_2", kernel_shape = (7,7,64,64), trainable = True)
+# encoder_conv3_1 = conv_layer(pool2, "conv3_1", trainable = False)
+# encoder_conv3_1 = activateFunc(encoder_conv3_1)
+# encoder_conv3_2 = conv_layer(encoder_conv3_1, "conv3_2", trainable = False)
+# encoder_conv3_2 = activateFunc(encoder_conv3_2)
+# encoder_conv3_3 = conv_layer(encoder_conv3_2, "conv3_3", trainable = False)
+# encoder_conv3_3 = activateFunc(encoder_conv3_3)
+# pool3, pool3_argmax = max_pool_2x2(encoder_conv3_3, "pool3")
+
+# #======================================================
+
+# uppooling_3 = uppooling_layer(pool3, pool3_argmax, tf.shape(encoder_conv3_3))
+# decoder_conv3_1 = conv_layer(uppooling_3, "decoder_conv3_1", kernel_shape = (7,7,256,128), trainable = False)
+# decoder_conv3_2 = conv_layer(decoder_conv3_1, "decoder_conv3_2", kernel_shape = (7,7,128,128), trainable = False)
+
+# uppooling_2 = uppooling_layer(decoder_conv3_2, pool2_argmax, tf.shape(encoder_conv2_2))
+# decoder_conv2_1 = conv_layer(uppooling_2, "decoder_conv2_1", kernel_shape = (7,7,128,128), trainable = False)
+# decoder_conv2_2 = conv_layer(decoder_conv2_1, "decoder_conv2_2", kernel_shape = (7,7,128,64), trainable = False)
 
 uppooling_1 = uppooling_layer(pool1, pool1_argmax, tf.shape(encoder_conv1_2))
-
 decoder_conv1_1 = conv_layer(uppooling_1, "decoder_conv1_1", kernel_shape = (7,7,64,64), trainable = True)
 decoder_conv1_2 = conv_layer(decoder_conv1_1, "decoder_conv1_2", kernel_shape = (7,7,64,64), trainable = True)
 
@@ -162,13 +179,15 @@ class_balancing = np.array([0.421237196, 0.0321783686, 0.00393296868, 0.04582878
  0.00383764581, 1, 0.00270661894, 0.000686221625, 0.00152857153])
 median = np.median(class_balancing)
 class_balancing/=median
-class_balancing = np.cbrt(class_balancing)
+class_balancing = np.sqrt(class_balancing)
 
 cross_entropy = -tf.reduce_sum(tf.multiply(labels * tf.log(output_labels + 1e-10), class_balancing), axis = 3)
 #cross_entropy = -tf.reduce_sum(labels * tf.log(output_labels + 1e-10), axis = 3)
 cross_entropy = tf.reduce_mean(cross_entropy)
 
-train_step = tf.train.RMSPropOptimizer(learning_rate = 0.01, decay = 0.9).minimize(cross_entropy)
+fine_tune_lr = 0.000001
+training_lr = 0.01
+train_step = tf.train.RMSPropOptimizer(learning_rate = training_lr, decay = 0.9).minimize(cross_entropy)
 
 # new_variables = [Kernel["decoder_conv2_1"], Kernel["decoder_conv2_2"], Bias["decoder_conv2_2"], Bias["decoder_conv2_2"]]
 # fine_tune_variables = [Kernel["score"], Bias["score"]] #, Kernel["decoder_conv1_1"], Kernel["decoder_conv1_2"], Bias["decoder_conv1_2"], Bias["decoder_conv1_2"]
@@ -186,9 +205,10 @@ with tf.Session() as sess:
     init = tf.global_variables_initializer()
     sess.run(init)
 
-    label_dir = "./label_camvid/"
-    train_dir = './train_camvid/'
+    label_dir = "./label_small_size/"
+    train_dir = './train_small_size/'
     data_list = os.listdir(train_dir)
+    label_list = os.listdir(label_dir)
 
     output_tensors = [train_step, cross_entropy, output_labels]
     for key in Kernel:
@@ -199,41 +219,45 @@ with tf.Session() as sess:
 
     l = len(data_list)
 
-    BATCH_SIZE = 1
-    i = start_num
-    while i<l:
-        batch_data = []
-        batch_label = []
-        while i < start_num + BATCH_SIZE and i<l:
-            img = np.load(train_dir+ data_list[i])
-            labelFileName = data_list[i][0:len(data_list[i])-4]
-            label = np.load(label_dir + labelFileName + '.npy')
-            batch_data.append(img)
-            batch_label.append(label)
-            i+=1
-        start_num = i
+    BATCH_SIZE = 20
 
-        feed_dict = {in_data: batch_data, labels: batch_label}
-        output_values = sess.run(output_tensors, feed_dict = feed_dict)
-        print(str(i) + ' ' + str(output_values[1]))
-
-        shape = np.shape(img)
-
-        print("========================================")
-        
-        j = 3
-        for key in Kernel:
-            data[key] = [output_values[j]]
-            j+=1
-        for key in Bias:
-            data[key].append(output_values[j])
-            j+=1
-        data["num"] = i
-        if (i%18 == 0) or i == l-1:
-            np.save(recovery_path, data)
+    for epoch in range(start_epoch, BATCH_SIZE):
+        i = 0
+        h = np.arange(l)
+        while i<l:
+            start_num = i
+            batch_data = []
+            batch_label = []
+            while i < start_num + BATCH_SIZE and i<l:
+                m = np.random.randint(l-i, size = 1)[0]
+                index = h[m]
+                h[m] = h[l - i - 1]
+                img = np.load(train_dir+ data_list[index])
+                #labelFileName = data_list[i][0:len(data_list[i])-4]
+                label = np.load(label_dir + label_list[index])
+                batch_data.append(img)
+                batch_label.append(label)
+                i+=1
             
-        if (i%18 == 0):
-            ans_img = utils.change_label_to_img(output_values[2])
-            mpimg.imsave("ans.jpg", ans_img)
-            ans_img = utils.change_label_to_img(np.array(batch_label))
-            mpimg.imsave("label.jpg", ans_img)
+            feed_dict = {in_data: batch_data, labels: batch_label}
+            output_values = sess.run(output_tensors, feed_dict = feed_dict)
+
+            print(str(epoch) + " " + str(i) + ' ' + str(output_values[1]))
+            print("========================================")
+            
+            j = 3
+            for key in Kernel:
+                data[key] = [output_values[j]]
+                j+=1
+            for key in Bias:
+                data[key].append(output_values[j])
+                j+=1
+                
+            if (i%20 == 0):
+                ans_img = utils.change_label_to_img(output_values[2])
+                mpimg.imsave("ans.jpg", ans_img)
+                ans_img = utils.change_label_to_img(np.array(batch_label))
+                mpimg.imsave("label.jpg", ans_img)
+
+        data["epoch"] = epoch
+        np.save(recovery_path, data)
