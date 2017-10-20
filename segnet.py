@@ -103,7 +103,7 @@ if os.path.isfile(recovery_path):
     #     start_num = 0
     if "epoch" in data:
         start_epoch = data["epoch"] + 1
-    print("Recover from " + recovery_path + ". At data " + str(start_num) + " at epoch " + str(start_epoch))
+    print("Recover from " + recovery_path + ". at epoch " + str(start_epoch))
 else:
     file_path = "./vgg16.npy"
     vgg = np.load(file_path, encoding='latin1').item()
@@ -140,35 +140,47 @@ encoder_conv1_2 = conv_layer(encoder_conv1_1, "conv1_2", trainable = False)
 encoder_conv1_2 = activateFunc(encoder_conv1_2)
 pool1, pool1_argmax = max_pool_2x2(encoder_conv1_2, "pool1")
 
-# encoder_conv2_1 = conv_layer(pool1, "conv2_1", trainable = False)
-# encoder_conv2_1 = activateFunc(encoder_conv2_1)
-# encoder_conv2_2 = conv_layer(encoder_conv2_1, "conv2_2", trainable = False)
-# encoder_conv2_2 = activateFunc(encoder_conv2_2)
-# pool2, pool2_argmax = max_pool_2x2(encoder_conv2_2, "pool2")
+encoder_conv2_1 = conv_layer(pool1, "conv2_1", trainable = False)
+encoder_conv2_1 = activateFunc(encoder_conv2_1)
+encoder_conv2_2 = conv_layer(encoder_conv2_1, "conv2_2", trainable = False)
+encoder_conv2_2 = activateFunc(encoder_conv2_2)
+pool2, pool2_argmax = max_pool_2x2(encoder_conv2_2, "pool2")
 
-# encoder_conv3_1 = conv_layer(pool2, "conv3_1", trainable = False)
-# encoder_conv3_1 = activateFunc(encoder_conv3_1)
-# encoder_conv3_2 = conv_layer(encoder_conv3_1, "conv3_2", trainable = False)
-# encoder_conv3_2 = activateFunc(encoder_conv3_2)
-# encoder_conv3_3 = conv_layer(encoder_conv3_2, "conv3_3", trainable = False)
-# encoder_conv3_3 = activateFunc(encoder_conv3_3)
-# pool3, pool3_argmax = max_pool_2x2(encoder_conv3_3, "pool3")
+encoder_conv3_1 = conv_layer(pool2, "conv3_1", trainable = False)
+encoder_conv3_1 = activateFunc(encoder_conv3_1)
+encoder_conv3_2 = conv_layer(encoder_conv3_1, "conv3_2", trainable = False)
+encoder_conv3_2 = activateFunc(encoder_conv3_2)
+encoder_conv3_3 = conv_layer(encoder_conv3_2, "conv3_3", trainable = False)
+encoder_conv3_3 = activateFunc(encoder_conv3_3)
+pool3, pool3_argmax = max_pool_2x2(encoder_conv3_3, "pool3")
 
-# #======================================================
+encoder_conv4_1 = conv_layer(pool3, "conv4_1", trainable = False)
+encoder_conv4_1 = activateFunc(encoder_conv4_1)
+encoder_conv4_2 = conv_layer(encoder_conv4_1, "conv4_2", trainable = False)
+encoder_conv4_2 = activateFunc(encoder_conv4_2)
+encoder_conv4_3 = conv_layer(encoder_conv4_2, "conv4_3", trainable = False)
+encoder_conv4_3 = activateFunc(encoder_conv4_3)
+pool4, pool4_argmax = max_pool_2x2(encoder_conv4_3, "pool4")
 
-# uppooling_3 = uppooling_layer(pool3, pool3_argmax, tf.shape(encoder_conv3_3))
-# decoder_conv3_1 = conv_layer(uppooling_3, "decoder_conv3_1", kernel_shape = (7,7,256,128), trainable = False)
-# decoder_conv3_2 = conv_layer(decoder_conv3_1, "decoder_conv3_2", kernel_shape = (7,7,128,128), trainable = False)
+#======================================================
 
-# uppooling_2 = uppooling_layer(decoder_conv3_2, pool2_argmax, tf.shape(encoder_conv2_2))
-# decoder_conv2_1 = conv_layer(uppooling_2, "decoder_conv2_1", kernel_shape = (7,7,128,128), trainable = False)
-# decoder_conv2_2 = conv_layer(decoder_conv2_1, "decoder_conv2_2", kernel_shape = (7,7,128,64), trainable = False)
+uppooling_4 = uppooling_layer(pool4, pool4_argmax, tf.shape(encoder_conv4_3))
+decoder_conv4_1 = conv_layer(uppooling_4, "decoder_conv4_1", kernel_shape = (7,7,512,256), trainable = True)
+decoder_conv4_2 = conv_layer(decoder_conv4_1, "decoder_conv4_2", kernel_shape = (7,7,256,256), trainable = True)
 
-uppooling_1 = uppooling_layer(pool1, pool1_argmax, tf.shape(encoder_conv1_2))
+uppooling_3 = uppooling_layer(decoder_conv4_2, pool3_argmax, tf.shape(encoder_conv3_3))
+decoder_conv3_1 = conv_layer(uppooling_3, "decoder_conv3_1", kernel_shape = (7,7,256,128), trainable = True)
+decoder_conv3_2 = conv_layer(decoder_conv3_1, "decoder_conv3_2", kernel_shape = (7,7,128,128), trainable = True)
+
+uppooling_2 = uppooling_layer(decoder_conv3_1, pool2_argmax, tf.shape(encoder_conv2_2))
+decoder_conv2_1 = conv_layer(uppooling_2, "decoder_conv2_1", kernel_shape = (7,7,128,128), trainable = True)
+decoder_conv2_2 = conv_layer(decoder_conv2_1, "decoder_conv2_2", kernel_shape = (7,7,128,64), trainable = True)
+
+uppooling_1 = uppooling_layer(decoder_conv2_2, pool1_argmax, tf.shape(encoder_conv1_2))
 decoder_conv1_1 = conv_layer(uppooling_1, "decoder_conv1_1", kernel_shape = (7,7,64,64), trainable = True)
 decoder_conv1_2 = conv_layer(decoder_conv1_1, "decoder_conv1_2", kernel_shape = (7,7,64,64), trainable = True)
 
-output = channel_change(decoder_conv1_2, "score", trainable = True)
+output = channel_change(decoder_conv1_2, "score", trainable = False)
 
 output_labels = tf.nn.softmax(output)
 
@@ -179,15 +191,15 @@ class_balancing = np.array([0.421237196, 0.0321783686, 0.00393296868, 0.04582878
  0.00383764581, 1, 0.00270661894, 0.000686221625, 0.00152857153])
 median = np.median(class_balancing)
 class_balancing/=median
-class_balancing = np.sqrt(class_balancing)
+#class_balancing = np.sqrt(class_balancing)
 
 cross_entropy = -tf.reduce_sum(tf.multiply(labels * tf.log(output_labels + 1e-10), class_balancing), axis = 3)
 #cross_entropy = -tf.reduce_sum(labels * tf.log(output_labels + 1e-10), axis = 3)
 cross_entropy = tf.reduce_mean(cross_entropy)
 
-fine_tune_lr = 0.000001
+fine_tune_lr = 0.00001
 training_lr = 0.01
-train_step = tf.train.RMSPropOptimizer(learning_rate = training_lr, decay = 0.9).minimize(cross_entropy)
+train_step = tf.train.RMSPropOptimizer(learning_rate = fine_tune_lr, decay = 0.9).minimize(cross_entropy)
 
 # new_variables = [Kernel["decoder_conv2_1"], Kernel["decoder_conv2_2"], Bias["decoder_conv2_2"], Bias["decoder_conv2_2"]]
 # fine_tune_variables = [Kernel["score"], Bias["score"]] #, Kernel["decoder_conv1_1"], Kernel["decoder_conv1_2"], Bias["decoder_conv1_2"], Bias["decoder_conv1_2"]
@@ -201,7 +213,7 @@ train_step = tf.train.RMSPropOptimizer(learning_rate = training_lr, decay = 0.9)
 
 #=================================== run ==================================================
 
-with tf.Session() as sess:    
+with tf.Session() as sess:
     init = tf.global_variables_initializer()
     sess.run(init)
 
@@ -221,7 +233,7 @@ with tf.Session() as sess:
 
     BATCH_SIZE = 20
 
-    for epoch in range(start_epoch, BATCH_SIZE):
+    for epoch in range(start_epoch, 80):
         i = 0
         h = np.arange(l)
         while i<l:
@@ -253,7 +265,7 @@ with tf.Session() as sess:
                 data[key].append(output_values[j])
                 j+=1
                 
-            if (i%20 == 0):
+            if (i%40 == 0):
                 ans_img = utils.change_label_to_img(output_values[2])
                 mpimg.imsave("ans.jpg", ans_img)
                 ans_img = utils.change_label_to_img(np.array(batch_label))
