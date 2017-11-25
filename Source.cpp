@@ -19,19 +19,19 @@ using namespace Eigen;
 #define min(a, b) (a) < (b) ? (a): (b)
 typedef Eigen::Triplet<double> T;
 
-int getSlope(Point2f a, Point2f b) {
+int getSlope(Point2f a, Point2f b) {//获得斜率，其实并没有用上
 	float k = (b.y - a.y) / (b.x - a.x);
 }
 
-void getWeight(int i_row, int i_col, int j_row, int j_col, float step, Eigen::SparseMatrix<float> WIC) {
+void getWeight(int i_row, int i_col, int j_row, int j_col, float step, Eigen::SparseMatrix<float> &WIC) {//获得两点之间的权重，额，不知道怎么写，还没写好
 	float k = (j_row - i_row) / (j_col - i_col);
 	int rs = min(i_row, j_row);
 	int re = max(i_row, j_row);
 	int cs = min(i_col, j_col);
 	int ce = max(i_col, j_col);
-	for (float m = cs; m < ce; ce+=4*step) {
+	for (float m = cs; m < ce; m += 4*step) {
 		int i = floorf(m); 
-		int j = round(i*k);
+		int j = round(m*k);
 		}
 		
 	}
@@ -39,7 +39,7 @@ void getWeight(int i_row, int i_col, int j_row, int j_col, float step, Eigen::Sp
 
 
 
-void filter(const Mat &src, Mat &dst, Mat& filter, int filter_size) {
+void filter(const Mat &src, Mat &dst, Mat& filter, int filter_size) {//废了，别管
 	dst = src.clone();
 	int anchor = floor(filter_size / 2);
 	int r = src.rows;
@@ -135,13 +135,13 @@ void filter(const Mat &src, Mat &dst, Mat& filter, int filter_size) {
 
 }
 
-void rotate(const Mat &src1, const Mat &src2, Mat &dst1, Mat &dst2, int angle, Point2f center) {
+void rotate(const Mat &src1, const Mat &src2, Mat &dst1, Mat &dst2, int angle, Point2f center) {//给滤波器做旋转的，用在contourMat函数里头，参数src1和src2是一阶/二阶拉普拉斯高斯滤波器，两个一起旋转同样角度
 	Mat rot = getRotationMatrix2D(center, angle, 1);
 	warpAffine(src1, dst1, rot, src1.size());
 	warpAffine(src2, dst2, rot, src2.size());
 }
 
-void contourMat(const Mat &src, Mat &dst, int filter_size =9, float theta0 = 0.8, float theta1 = 2.4){
+void contourMat(const Mat &src, Mat &dst, int filter_size =9, float theta0 = 0.8, float theta1 = 2.4){//生成轮廓图的函数
 	Point2f center(floor((filter_size) / 2), floor((filter_size) / 2));
 
 	/*imshow("src", src);
@@ -286,7 +286,7 @@ void contourMat(const Mat &src, Mat &dst, int filter_size =9, float theta0 = 0.8
 
 }
 
-void preProcessing(Mat& src, Mat& dst) {
+void preProcessing(Mat& src, Mat& dst) {//其实也还没用到的图像预处理函数
 	vector<Mat> GRBChannels;
 	split(src, GRBChannels);
 
@@ -299,7 +299,7 @@ void preProcessing(Mat& src, Mat& dst) {
 int main() {
 	//Mat srcimg = imread("741681775.jpg");
 	//Mat srcimg = imread("363986180.jpg");
-	Mat srcimg = imread("641059184.jpg");
+	Mat srcimg = imread("641059184.jpg");//读入图像
 	//Mat srcimg = imread("735436.png");
 	Mat dstimg = srcimg.clone();
 	Mat testimg = srcimg.clone();
@@ -310,30 +310,31 @@ int main() {
 	Mat u = dstimg;// (c, r);//u and dstimg share a same data area
 	int newHeight = 500;
 	int newWidth = u.cols*newHeight / u.rows;
-	resize(u, u, Size(newWidth, newHeight));
+	resize(u, u, Size(newWidth, newHeight));//缩小一下
 	u.convertTo(u, CV_32FC1);
 	Mat YUV;
 	Mat gray;
-	cvtColor(u,YUV,CV_BGR2HSV);
+	cvtColor(u,YUV,CV_BGR2HSV);//转换成HSV三分量图，虽然目标图像的名字叫YUV但是其实是张HSV图……
 	cvtColor(u, gray, CV_BGR2GRAY);
 	/*cout << u << endl;
 	cout << endl;
 	cout << YUV << endl;*/
 	//cvtColor(YUV,YUV,COLOR_YUV2BGR);
 	vector<Mat> channels;
-	split(YUV, channels);
+	split(YUV, channels);//HSV图分割成三个channel
 	//cout << channels[2] << endl;
-	channels[2].convertTo(channels[2], CV_32FC1);
-	normalize(channels[2], channels[2], 1.0, 0.0, NORM_MINMAX);
+	channels[2].convertTo(channels[2], CV_32FC1);//取第三个channel，亮度值，转换为32FC1类型的数据
+	normalize(channels[2], channels[2], 1.0, 0.0, NORM_MINMAX);//均一化一下
 	testChan[2].convertTo(testChan[2], CV_32FC1);
 	//gray.convertTo(channels[2], CV_32FC1);
 	Mat dst(u.rows, u.cols, CV_32FC1);
-	contourMat(channels[2], dst);
-	const int pix = u.cols*u.rows;
-	Eigen::SparseMatrix<float> sparse_weight(pix, pix);
-	Eigen::SparseMatrix<float> D(pix, pix);
-	Eigen::SparseMatrix<float> L(pix, pix);
-	Eigen::SparseMatrix<float> DD(pix, pix);
+	contourMat(channels[2], dst);//得轮廓图dst
+
+	const int pix = u.cols*u.rows;//总像素个数
+	Eigen::SparseMatrix<float> sparse_weight(pix, pix);//稀疏权重图W
+	Eigen::SparseMatrix<float> D(pix, pix);//计算过程中用到的对角矩阵D，对角元素(i,i)为点i到其他所有点的距离之和
+	Eigen::SparseMatrix<float> L(pix, pix);//计算过程中用到的对称矩阵L = D-W
+	Eigen::SparseMatrix<float> DD(pix, pix);//计算过程中用到的对称矩阵DD = D^(1/2)
 	Eigen::VectorXf vec(pix);
 	Eigen::VectorXf rosslyn(pix);
 	for (int i = 0; i < pix; i++) {
@@ -342,7 +343,7 @@ int main() {
 	//Eigen::Matrix<double, Dynamic, Dynamic> sparse_weight(pix, pix);
 	//Eigen::Matrix<double, Dynamic, Dynamic> D(pix, pix);
 	sparse_weight.reserve(VectorXi::Constant(pix, 60));
-	D.reserve(VectorXi::Constant(pix, 1));
+	D.reserve(VectorXi::Constant(pix, 1));//稀疏矩阵每列保留存储空间
 	L.reserve(VectorXi::Constant(pix, 65));
 	DD.reserve(VectorXi::Constant(pix, 1));
 	cout << sparse_weight.cols() << ", " << sparse_weight.rows() << endl;
@@ -356,7 +357,7 @@ int main() {
 		//int j = i-36;
 		float ij = 0;
 		for (int k = 0; k < 90; k += uc) {
-			for (int j = i - 90 + k; j < i + 90 + k; j += 4) {
+			for (int j = i - 90 + k; j < i + 90 + k; j += 4) {//额大概就是取i附近的90个点吧……计算一下亮度差值
 				if (j < 0) {
 					continue;
 				}
@@ -367,28 +368,12 @@ int main() {
 				int j_row = round(j / uc);
 				int j_col = (j % uc);
 
-				float br = abs(((channels[2]).at<float>(j_row, j_col) - (channels[2]).at<float>(i_row, i_col)));
+				float br = abs(((channels[2]).at<float>(j_row, j_col) - (channels[2]).at<float>(i_row, i_col)));//两点间亮度值差
 				//float w = expf(-br / 10)*expf(-dis / 10);
 				float w = br;
 				//cout << "i: " << i << ", j: " << j << endl;
 				sparse_weight.insert(i, j) = w;
 				ij += w;
-
-				/*cout << "(" << i << ", " << j << "): " << endl;
-				cout << "i=(" << i_row << ", " << i_col << ")" << "j=(" << j_row << ", " << j_col << ") " ;*/
-				/*cout << "(j_row - i_row) ^ 2: " << (double)((j_row - i_row)*(j_row - i_row)) <<" , ";
-				cout << "(j_col - i_col) ^ 2: " << (double)((j_col - i_col)*(j_col - i_col)) << endl;*/
-				//float dis = 0.001*(sqrt((j_row - i_row)*(j_row - i_row) + (j_col - i_col)*(j_col - i_col)));
-				//float br = abs(((channels[2]).at<float>(j_row, j_col) - (channels[2]).at<float>(i_row, i_col)));
-				//float w = expf(-br / 10)*expf(-dis / 10);
-				//float w = br;
-				//sparse_weight.insert(i, j) = w;
-				//L.insert(i, j) = -w;
-				//sparse_weight(i, j) = w;
-				//ij += w;
-				//j += 4;
-				//cout << "processing, j = " << j << ", i = " << i << endl;
-				//		//cout << (float)br << endl;
 			}
 		
 		}
@@ -418,13 +403,13 @@ int main() {
 
 	Eigen::VectorXf y = D.cwiseSqrt()*q2;
 
-	cout << y << endl;
+	cout << y << endl;//上面是用数值方式计算出来的特征向量但是我忘记y和q2哪个是特征向量了嘿嘿嘿
 
-	Map<Matrix<float, Dynamic, Dynamic>> mq2(q2.data(), u.cols, u.rows);
+	Map<Matrix<float, Dynamic, Dynamic>> mq2(y.data(), u.cols, u.rows);
 
 	Matrix<float, Dynamic, Dynamic, RowMajor> rmq2= mq2.transpose();
 
-	Mat fin(rmq2.rows(), rmq2.cols(), CV_32FC1, rmq2.data());
+	Mat fin(rmq2.rows(), rmq2.cols(), CV_32FC1, rmq2.data());//以上三行是特征向量重排列
 
 	//threshold(fin, fin, 0.0001, 0.5, THRESH_BINARY);
 
@@ -436,26 +421,11 @@ int main() {
 	waitKey();
 
 	
-	//for (int i = 0; i < pNum; i++) {
-	//	for (int j = i; j < pNum; j++) {
-	//		int i_row = round(i / u.cols);
-	//		int i_col = i % u.cols;
-	//		int j_row = round(j / u.rows);
-	//		int j_col = j % u.rows;
-	//		/*cout << "(" << i << ", " << j << "): " << endl;
-	//		cout << "i=(" << i_row << ", " << i_col << ")" << "j=(" << j_row << ", " << j_col << ") " ;
-	//		cout << "(j_row - i_row) ^ 2: " << (double)((j_row - i_row)*(j_row - i_row)) <<" , ";
-	//		cout << "(j_col - i_col) ^ 2: " << (double)((j_col - i_col)*(j_col - i_col)) << endl;*/
-	//		float dis = sqrt((j_row - i_row)*(j_row - i_row) + (j_col - i_col)*(j_col - i_col));
-	//		float br = ((channels[2]).at<float>(j_row, j_col) - (channels[2]).at<float>(i_row, i_col));
-	//		if (br < 0)
-	//			br = -br;
-	//		dist.at<float>(i, j) = expf(-br / 10)*expf(-dis / 10);
-	//		//cout << (float)br << endl;
-	//	}
-	//}
+
 	
 	//cout << dist << endl;
+
+	//这后面的其实也不用看
 
 	cout << "weight matrix generated" << endl;
  	Mat gaussian_kernel = getGaussianKernel(9,0.8,CV_32FC1);
@@ -489,10 +459,6 @@ int main() {
 	Point q = srcimg.at<uchar>(500, 500,2);
 	cout << "p: " << p << ", q: " << q << endl;*/
 	//imgROI = srcimg(Rect(p,q));
-	cout << "------------------sparse sampling start-------------------------" << endl;
-	
-
-	cout << "------------------sparse sampling end-------------------------" << endl;
 	/*namedWindow("cat0",1);   
 	namedWindow("cat1",1);
 	namedWindow("cat2",1);
